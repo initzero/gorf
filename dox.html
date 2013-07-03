@@ -1,0 +1,499 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+
+<title>Protokół RedFaction</title><meta http-equiv="Content-type" content="text/html; charset=windows-1250">
+<style type="text/css">
+.c { font-family: monospace; padding: 0.7em; background-color: #e0e0e0; border: 1px solid #a0a0a0; }
+.pp { font-family: monospace; padding: 0.7em; background-color: #e0e0e0; border: 1px solid #a0a0a0; }
+.packet { font-family: monospace; padding: 0.7em; background-color: #e0e0e0; border: 1px solid #a0a0a0; }
+</style></head>
+<body>
+<center>
+<h1>Protokół RedFaction</h1>
+<h3>Copyright © 2008-2009 rafalh</h3>
+</center>
+<hr>
+
+<h3>1. Background</h3>RedFaction uses the UDP protocol. The package
+includes the beginning of the number of unsigned short indicating the
+type of package. <br><br>In describing the structures, it was assumed
+that the numbers are stored in the system Little endian (the most
+popular architecture used by Intel and AMD). In addition, most
+currently available compilers by default aligns variable to the size of
+the words of the architecture, so you should disable this feature:<div class="c"><pre>#pragma pack(push, 1)<br><br><i>/* deklaracje struktur */ /*Structure declarations*/</i>
+
+#pragma pack(pop)
+</pre></div>
+<p>The fields, whose meaning is unknown or not fully clear, marked unknown prefix.</p>
+
+<h3>2. The list of servers</h3>
+<p>To get a list of servers should be sent to the main server RF, which
+by default is rf.thqmultiplay.net, port 18444 the following package:
+</p><div class="packet">
+02 06 05 00 00 00 00 00 0a 00 00
+</div>
+<p>Server responds with a list of IP addresses and ports to listen on all servers FF (all versions 1.0-1.3):</p>
+<div class="c"><pre>struct rfServerIpPort<br>{<br>    uint32_t ip;<br>    uint16_t port;<br>};<br><br>struct rfServerList<br>{<br>    uint16_t type; <i>/* 0x602 */</i>
+    uint16_t type2; <i>/* 0x6 */</i>
+    uint32_t cn; <i>/* needed for the response */</i>
+    uint16_t undefined; <i>/* 0x1F5 */</i>
+    uint8_t cServers; <i>/* number of servers in the package (can be shipped nestępujących several packages) */</i>
+    uint32_t cAllServers; <i>/* total number of servers */</i>
+    struct rfServerIpPort servers[]; <i>/* array of IP addresses and ports of the server */</i>
+};
+</pre></div>
+<p>o the server does not send us this list at all times should tell him that everything arrived. It is advisable to answer him:</p>
+<div class="c"><pre>struct rfServerListReply<br>{<br>    uint16_t type; <i>/* 0x602 */</i>
+    uint16_t type2; <i>/* 0x1 */</i>
+    uint32_t cn; <i>/* cn with the package that corresponds to */</i>
+    uint16_t undefined; <i>/* 0xa */</i>
+    uint8_t undefined2; <i>/* 0x0 */</i>
+};
+</pre></div>
+<p>On the server responds:</p>
+<div class="c"><pre>struct rfServerListReply2<br>{<br>    uint16_t type; <i>/* 0x602 */</i>
+    uint16_t type2; <i>/* 0x7 */</i>
+    uint32_t cn; <i>/* needed for response */</i>
+    uint16_t undefined; <i>/* 0xa */</i>
+};
+</pre></div>
+<p>To this we reply: struct rfServerListReply;</p>
+
+<h3>3. Server Data</h3>
+<p>To get the server must send a four byte (long) 0 " In its response contains information about him:</p>
+<div class="c"><pre>struct rfServerInfo<br>{<br>    uint16_t type; <i>/* 0x0100 */</i>
+    uint16_t size; <span style="font-family: mon;"><span style="font-style: italic;">/* The size of the rest of the package */</span></span><i></i>
+    uint8_t version; <i>/* version of the game on the server */</i>
+    char name[]; <span style="font-family: mon;"><span style="font-style: italic;">/* server name */</span></span><i></i>
+    uint8_t game_type; <i>/* type of game (RF_DM, RF_TEAMDM, RF_CTF) */</i>
+    uint8_t players_count; <i>/* Number of players on the server */</i>
+    uint8_t max_players_count; <span style="font-family: mon;"><span style="font-style: italic;">/* Maximum number of players on the server */</span></span><i></i>
+    char level[]; <i>/* Name of the map */</i>
+    char mod[]; <i>/* MOD enabled on the server */</i>
+    uint8_t flags;
+};
+</pre></div>
+<p>We have the following flags, which can be combined operator-bit alternative:</p>
+<div class="pp"><pre>#define RF_DEDICATED 0x1 /* dedicated server */<br>#define RF_NOTLAN 0x2 /* not lanonly */<br>#define RF_PASSWORD 0x4 /* zahasłowany */<br></pre></div>
+<p>Versions of the game:</p>
+<div class="pp"><pre>#define RF_10 0x87 <i>/* 1.0 */</i>
+#define RF_11 0x87 <i>/* 1.1 (same as 1.0) */</i>
+#define RF_12 0x89 <i>/* 1.2 */</i>
+#define RF_13 0x91 <i>/* 1.3 */</i>
+</pre></div>
+
+<p>Types of games:</p>
+<div class="pp"><pre>#define RF_DM 0x0 <i>/* deathmatch */</i>
+#define RF_CTF 0x1 <i>/* capture the flag */</i>
+#define RF_TEAMDM 0x2 <i>/* team deathmatch */</i>
+</pre></div>
+
+<h3>4. Joining a server</h3>
+<div class="c"><pre>#define RF_JOIN 0x200<br><br>struct rfJoin<br>{<br>    uint16_t type; <i>/* 0x200 */</i>
+    uint16_t size; <i>/* The size of the rest of the package */</i>
+    uint8_t version; <i>/* version of the game client */</i>
+    char name[]; <i>/* Name of the player */</i>
+    uint32_t undefined; <i>/* 0x5 */</i>
+    char password[]; <i>/* password to the server ("" if the server without a password) */</i>
+    uint32_t connection_speed; <i>/* connection speed in bytes / sec (56K modem - 0x0A28) */</i>
+    char undefined2[16]; <i>/* 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00 */</i>
+    <i>//char undefined2[32]; /* (only version 1.0) 22 3b 68 3a 00 20 f0 00 ee 82 b2 7e 00 e0 f6 00 cd 0d 66 92 00 c0 13 00 00 00 00 00 00 00 00 00 */</i>
+};
+</pre></div>
+<p>If something goes wrong we will get a package:</p>
+<div class="c"><pre>#define RF_JOIN_FAILED 0x400<br><br>struct rfJoinFailed<br>{<br>    uint16_t type; <i>/* 0x400 */</i>
+    uint16_t size; <i>/* size of the rest of the package */</i>
+    uint8_t reason; <i>/* reason for failure */</i>
+};
+
+#define RF_WRONG_PASS 0x03 /* Wrong password */
+#define RF_BANNED 0x0a /* banned */
+#define RF_MAPCHANGE 0x05 /* map change in progress */
+</pre></div>
+<p>If successful the server responds with the following package:</p>
+<div class="c"><pre>#define RF_JOIN_SUCCESS 0x300<br><br>struct rfJoinSuccess<br>{<br>    uint16_t type; <i>/* 0x300 */</i>
+    uint16_t size; <i>/* size of the rest of the package */</i>
+    char level[]; <i>/* File name RFL current map */</i>
+    uint32_t undefined;
+    uint8_t game_type; <i>/* type of game (RF_DM, RF_TEAMDM, RF_CTF) as in the case of server */</i>
+    char undefined[7] <i>/* 00 00 00 12 24 00 00 */</i>
+    float levelTime; <i>/* time since the beginning of the map */</i>
+    float timeLimit; <i>/* timeout */</i>
+    uint8_t id; <i>/* Our ID */</i>
+    uint32_t flags; <i>/* 0x4 "logical OR" RF_BLUETEAM */</i>
+};
+</pre></div>
+<p>Next when you attach the ping from the server (00 18 00 00) must be:</p>
+<div class="packet">
+01 03 00 42 01 00 00 00 00 00 00
+</div>
+
+struct rfHaveLevel;
+
+<h3>5. Ping</h3>
+<p>Server to ping us from time to time by sending a package:</p>
+<div class="packet">
+00 18 00 00
+</div>
+<p>Then it must be answered:</p>
+<div class="packet">
+00 19 00 00
+</div>
+
+<h3>6. Event Packets</h3>
+<p>Invisible if the name is appropriate. He describes them here because
+they are generally constructed similarly. These packets and sends the
+player and the server:</p>
+<div class="c"><pre>#define RF_EVENT 0x0101<br><br>struct rfEventsHeader<br>{<br>    uint16_t type; <i>/* 0x0101 */</i>
+    uint8_t undefined;
+    uint16_t n; <i>/* number of packages. Each subsequent event has a different number. They are counted from the junction (pierwssze event is 0). Separately, it has the server and the player because the packets sent and received can be quite different */</i>
+    uint16_t len; <i>/* Length of event data */</i>
+    uint32_t cn; <i>/* needed for response */</i>
+};
+
+struct rfEventHeader
+{
+    uint8_t type; <i>/* Type of events */</i>
+    uint16_t len; <i>/* length of data events */</i>
+};
+</pre></div>
+<p>After struct rfEventsHeader packages are different events. In one
+package may be several. To zainterpretować should move to the next
+until it reaches the address of the package. When you receive a package
+of this type of server / you should answer:</p>
+<div class="c"><pre>struct rfEventsReply<br>{<br>    uint16_t type; <i>/* 0x0001 */</i>
+    uint8_t undefined; <i>/* 0x0 */</i>
+    uint16_t undefined2;  <i>/* 0x0 */</i>
+    uint16_t undefined3; <i>/* 0x4 */</i>
+    uint32_t cn; <i>/* cn with the package that corresponds to */</i>
+    uint16_t n; <i>/* package to which the answer */</i>
+    uint16_t undefined4; <i>/* 0x0 */</i>
+};
+</pre></div>
+
+<h3>7. Events</h3>
+
+<h4>7.1. Attaching new players</h4>
+<div class="c"><pre>#define RF_NEW_PLAYER 0x05<br><br>#define RF_BLUETEAM 0x80 <i>/* Niewiesz why there use of these marks a further 0 and 1 */</i>
+
+struct rfNewPlayer
+{
+    uint8_t id; <i>/* player ID */</i>
+    uint32_t ip; <i>/* player IP */</i>
+    uint16_t port; <i>/* port on which the player communicates with the server */</i>
+    uint32_t flags; <i>/* flags - RF_BLUETEAM </i><i>"logical OR"</i><i> 0x4 */</i>
+    uint32_t connection_speed; <i>/* b / s like in rfJoin struct */</i>
+    char name[]; <i>/*  player name */</i>
+};
+</pre></div>
+
+<h4>7.2. Players list</h4>
+<p>We get it only once after the merger</p>
+<div class="c"><pre>#define RF_PLAYERS_LIST 0x06<br><br>struct rfPlayersList<br>{<br>    struct rfPlayer players[];<br>    uint8_t undefined; <i>/* 02 */</i>
+};
+
+struct rfPlayer
+{
+    uint8_t flags;
+    uint8_t id;
+    [uint32_t undefined2] <i>/* occurs only when a flag is set (flags &amp; 1). Example of: 50 00 00 3B */</i>
+    uint32_t flags2; <i>/* 01, 08 </i><i>"logical OR"</i><i> RF_BLUETEAM shows in joining the team. When a player changes does not change */</i>
+    uint32_t ip; <i>/* player IP */</i>
+    uint16_t port; <i>/* port on which the player communicates with the server  */</i>
+    char name[]; <i>/* player name */</i>
+    uint8_t team; <i>/* team (0-red, 1-heaven). DM when changing the blue team is changing and not flags2 */</i>
+};
+</pre></div>
+<p>Invisible so that the creator did not added to the package of
+players. To calculate the process must address outside of the package
+with the length of the package and go through all the players up to
+that address. Note the undefined2. Appears depending on the flag</p>
+
+<h4>7.3. Players leave</h4>
+<p>We get it when others leave, and we send when we walk away.</p>
+<div class="c"><pre>#define RF_PLAYER_LEFT 0x07<br><br>struct rfPlayerLeft<br>{<br>    uint8_t id; <i>/* Player ID */</i>
+    uint8_t type; <i>/* How to exit */</i>
+};
+</pre></div>
+<p>I learned how to leave:</p>
+<div class="c"><pre>#define RF_LEFT_NORMAL 0x01<br>#define RF_LEFT_KICKED 0x02<br>#define RF_LEFT_BETWEENLVLS 0x05<br>#define RF_LEFT_DIDNTHAVELVL 0x07<br></pre></div>
+
+<h4>7.4. End Server</h4>
+<p>The package is empty.</p>
+<div class="packet"><pre>#define RF_SERVER_STOP 0x08<br></pre></div>
+
+<h4>7.5. The package is empty.</h4>
+<p>We use it when you attach to the server.</p>
+<div class="packet"><pre>#define RF_HAVE_LEVEL 0x09<br><br>struct rfHaveLevel<br>{<br>    char level[];<br>};<br></pre></div>
+
+<h4>7.6. Back to the game</h4>
+<p>I do not know what this package.</p>
+<div class="packet"><pre>#define RF_BACK_IN_GAME 0x0B<br><br>struct rfBackInGame<br>{<br>    uint8_t id; <i>/* ID such as a player */</i>
+};
+</pre></div>
+
+<h4>7.7. Changing the name of a player</h4>
+<p>We get it when people change their name and send when we do it ourselves.</p>
+<div class="packet"><pre>#define RF_NAME_CHANGE 0x0D<br><br>struct rfNameChange<br>{<br>    uint8_t id; <i>/* player ID */</i>
+    char sName[]; <i>/* new name */</i>
+};
+</pre></div>
+
+<h4>7.8. End of the map</h4>
+<div class="packet"><pre>#define RF_MAP_END 0x15<br></pre></div>
+
+<h4>7.9. Change map</h4>
+<div class="packet"><pre>#define RF_MAP_CHANGE 0x16<br><br>struct rfMapChange<br>{<br>    char sLevel[]; <i>/* map name */</i>
+    uint32_t undefined;
+};
+</pre></div>
+
+<h4>7.10. Changing teams</h4>
+<div class="packet"><pre>#define RF_TEAM_CHANGE 0x17<br><br>struct rfTeamChange<br>{<br>    uint8_t id; <i>/* player ID */</i>
+    uint8_t team; <i>/* team (0-red, 1-heaven, the FF-Green - RF error, the best of all values above 1 are not interpreted) */</i>
+};
+</pre></div>
+
+<h4>7.11. Taking the flag</h4>
+<div class="packet"><pre>#define RF_FLAG_STEAL 0x1F<br><br>struct rfFlagSteal<br>{<br>    uint8_t id; <i>/* The player who stole the flag */</i>
+    uint8_t flags_red; <i>/* number of points for the red after the capture */</i>
+    uint8_t flags_blue; <i>/* number of points for the blue after the capture */</i>
+};
+</pre></div>
+
+<h4>7.12. Gaining flag</h4>
+<div class="packet"><pre>#define RF_FLAG_CAPTURE 0x20<br><br>struct rfFlagCapture<br>{<br>    uint8_t team; <i>/* team, which won the flag (0-red, 1-heaven) */</i>
+    uint8_t id; <i>/* The player who won the flag */</i>
+    uint8_t flags_red; <i>/* number of points for the red after the capture */</i>
+    uint8_t flags_blue; <i>/* number of points for the blue after the capture */</i>
+};
+</pre></div>
+
+<h4>7.13. Stolen flag</h4>
+<p>We get the package with the addition only when ktośma flag. If both teams have the flag sent two packages.</p>
+<div class="packet"><pre>#define RF_FLAG_HAVING 0x21<br><br>struct rfFlagHaving<br>{<br>    uint8_t undefined; <i>/* 0xFF */</i>
+    uint8_t flag; <i>/* 0-red, one blue */</i>
+    uint8_t id; <i>/* ID of the player who has the flag */</i>
+};
+</pre></div>
+
+<h4>7.14. Returning flags</h4>
+<div class="packet"><pre>#define RF_FLAG_RETURN 0x22<br><br>struct rfFlagReturn<br>{<br>    uint8_t team; <i>/* the team which took the flag (0-red, 1-heaven)  */</i>
+    uint8_t id; <i>/* ID of the player who drew the flag (FF if the same back) */</i>
+    uint8_t flags_red; <i>/* number of points for the red after the capture */</i>
+    uint8_t flags_blue; <i>/* number of points for the blue after the capture */</i>
+};
+</pre></div>
+
+<h4>7.15. Loss flags</h4>
+<p>The flag is now in this position.</p>
+<div class="packet"><pre>#define RF_FLAG_LOSE 0x23<br><br>struct rfFlagLose<br>{<br>    uint8_t team; <i>/*  team, which lost its flag (0-red, 1-heaven) * */</i>
+    uint8_t flags_red; <i>/* number of red flags */</i>
+    uint8_t flags_blue; <i>/* number of blue flags */</i>
+    float x; <i>/* X coordinate flags */</i>
+    float y; <i>/* Y */</i>
+    float z; <i>/* Z */</i>
+};
+</pre></div>
+
+<h4>7.16. Assassination player</h4>
+<p>Very poorly understood package.</p>
+<div class="packet"><pre>#define RF_PLAYER_KILL 0x27<br><br>struct rfPlayerKill<br>{<br>    char undefined[8]; <i>/* Eg 49 03 4A 03 BA 59 9C C3 */</i>
+    uint8_t id_killer; <i>/* ID of the player killing */</i>
+    uint8_t id_killed; <i>/* Player ID dead */</i>
+    char undefined2[69]; <i>/* Eg. 07 00 02 00 00 05 00 00 00 FF FF FF FF 16 00 00 00 73 03 74 03 D9 9F 63 41 73 78 17 C1 B6 BB 29 C1 00 00 00 00 FF FF 7F BF 00 00 00 80 4C 3A 73 BF 00 00 00 00 00 B4 9F BE 00 B4 9F 3E 00 00 00 00 4C 3A 73 BF */</i>
+};
+</pre></div>
+
+<h4>7.17. Taking itemu</h4>
+<p>This package is to be sent by the server.</p>
+<div class="packet"><pre>#define RF_GOT_ITEM 0x28<br><br>struct rfGotItem<br>{<br>    char undefined[20]; <i>/* Eg 3A 02 3B 02 4B 03 4C 03 0F 00 00 00 63 00 00 00 63 00 00 00 */</i>
+};
+</pre></div>
+
+<h4>7.18. Geomod</h4>
+<p>This package is to be sent by the server, when someone made a hole in the wall.</p>
+<div class="packet"><pre>#define RF_GOT_ITEM 0x29<br><br>struct rfGotItem<br>{<br>    char undefined[100];<br>};<br></pre></div>
+
+<h4>7.19. Spawn player</h4>
+<div class="packet"><pre>#define RF_PLAYER_SPAWN 0x2C<br><br>struct rfPlayerSpawn<br>{<br>    char name[]; <i>/* name of the player, what invisible */</i>
+    uint16_t undefined; <i>/* eg. 00 05 */</i>
+    uint32_t oid; <i>/* Object ID for example 04 00 05 00 - I do not know exactly what field. It looks like two short numbers, the second of which is greater by one than the first (not always) */</i>
+    uint32_t undefined2; <i>/* FF FF FF FF */</i>
+    float x; <i>/* X coord */</i>
+    float y; <i>/* Y */</i>
+    float z; <i>/* Z */</i>
+    char undefined3[36]; <i>/* eg. 00 00 80 3F 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 3F 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 3F */</i>
+    uint8_t id; <i>/* Player ID */</i>
+    uint32_t suit; <i>/* costume player */</i>
+    uint32_t undefined4; <i>/* eg. 03 00 00 00 */</i>
+    uint32_t undefined5; <i>/* eg. FF FF FF FF */</i>
+};
+</pre></div>
+
+<h4>7.20. Reloading ammunition</h4>
+<p>When the player presses the button przeładownia (default R), the
+packet is sent by him regardless of whether or not full magazine (bug
+in RF).</p>
+<div class="c"><pre>#define RF_RELOAD_AMMO 0x2F<br><br>struct rfReloadAmmo<br>{<br>    uint32_t weapon; /* ID of weapon */<br>};<br></pre></div>
+
+<h4>7.21. RCON Request</h4>
+<p>To find out who sent the package must check the server IP addresses.</p>
+<div class="packet"><pre>#define RF_RCON_REQUEST 0x32<br><br>struct rfRconRequest<br>{<br>    char rcon[]; <i>/* rcon password */</i>
+};
+</pre></div>
+
+<h4>7.22. RCON Commands</h4>
+<p>To find out who sent the package must check the server IP addresses.</p>
+<div class="packet"><pre>#define RF_RCON_COMMAND 0x33<br><br>struct rfRconCommand<br>{<br>    char command[]; <i>/* RCON command such as "level DM01" */</i>
+};
+</pre></div>
+
+<h4>7.23. Team Results</h4>
+<p>This packet is sent by the server when you attach to servers and TeamDM CTF?.</p>
+<div class="packet"><pre>#define RF_TEAMS_SCORES 0x35<br><br>struct rfTeamsScores<br>{<br>    uint16_t score_red; <i>/* red points */</i>
+    uint16_t score_blue; <i>/* blue points */</i>
+};
+</pre></div>
+
+
+<h3>10. Sending / receiving messages</h3>
+<div class="c"><pre>#define RF_MESSAGE 0x0C00<br>#define RF_SERVER 0xff <i>/* Server ID when sending a message */</i>
+
+struct rfMessage
+{
+    uint16_t type; <i>/* 0x0C00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t id; <i>/* ID of sending the player */</i>
+    uint8_t recipients; <i>/* 0-message output (global), 1-team */</i>
+    char message[]; <i>/* message */</i>
+};
+</pre></div>
+
+<h3>11. Player statistics</h3>
+<div class="c"><pre>#define RF_STATS 0x1A00<br><br>struct rfStats<br>{<br>    uint16_t type; <i>/* 0x1A00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t undefined; <i>/* 07 */</i>
+    uint8_t cPlayers; <i>/* number of players */</i>
+    struct rfPlayerStats rfStats[];
+    float levelTime; <i>/* time since the beginning of the map */</i>
+    float timeLimit; <i>/* timeout */</i>
+};
+
+struct rfPlayerStats
+{
+    uint8_t id; <i>/* player ID */</i>
+    uint16_t ping; <i>/* player ping */</i>
+    uint8_t undefined; <i>/* eg. 0xFF */</i>
+    int16_t frags; <i>/* player frags (points per kill, can be negative when a player does suicide) */</i>
+    uint8_t flags;
+    uint8_t undefined2 <i>/* eg. 0x00 */</i>
+};
+</pre></div>
+
+<h3>12. Government spawn</h3>
+<p>We send this package when you want to zespawnować. This does not
+mean that the server will allow us to. We should wait RF_PLAYER_SPAWN
+package.</p>
+<div class="c"><pre>#define RF_SPAWN_REQUEST 0x0E00<br><br>struct rfSpawnRequest<br>{<br>    uint16_t type; <i>/* 0x0E00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint32_t suit; <i>/* costume player */</i>
+    uint8_t id; <i>/* Player ID */</i>
+};
+</pre></div>
+
+<h3>12. Activation trigger</h3>
+<div class="c"><pre>#define RF_TRIGGER 0x0F00<br><br>struct rfTrigger<br>{<br>    uint16_t type; <i>/* 0x0F00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint32_t uid; <i>/* trigger UID */</i>
+    uint32_t undefined;
+};
+</pre></div>
+
+<h3>13. Destruction facility</h3>
+<div class="c"><pre>#define RF_SLAY_OBJECT 0x1E00<br><br>struct rfSlayObject<br>{<br>    uint16_t type; <i>/* 0x1E00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint32_t uid; <i>/* UID of object */</i>
+    uint32_t undefined; <i>/* 0xFFFFFFFF */</i>
+};
+</pre></div>
+
+<h3>14. Shooting</h3>
+<p>We get it when another player has shot the weapon at one time (not
+series). You can not specify where he scored. You can only use the gaze
+direction of the player package RF_OBJECT_UPDATE.
+</p><div class="c"><pre>#define RF_SHOOT 0x3000<br><br>struct rfShoot<br>{<br>    uint16_t type; <i>/* 0x3000 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t undefined; <i>/* 3 */</i>
+    uint8_t undefined2; <i>/* 4 */</i>
+    uint8_t id; <i>/* ID of player ? */</i>
+};
+</pre></div>
+<p>When we shoot, we use this package in the extended version.</p>
+<div class="c"><pre>struct rfShoot2<br>{<br>    uint16_t type; <i>/* 0x3000 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t undefined; <i>/* eg. 3 */</i>
+    uint8_t undefined2; <i>/* eg. 4 */</i>
+    float x; <i>/* X coord of shot */</i>
+    float y; <i>/* Y */</i>
+    float z; <i>/* Z */</i>
+    uint16_t direction_x; <i>/* X direction vector */</i>
+    uint16_t direction_y; <i>/* Y */</i>
+    uint16_t direction_z; <i>/* Z */</i>
+    uint8_t near_player; <i>/* 0 - end of package, 1 - the nearest player strzałowi */</i>
+    [uint8_t near_id; <i>/* Player ID strzałowi short */</i>
+    uint16_t undefined4;] <i>/* eg. 94 68 */</i>
+};
+</pre></div>
+
+<h3>15. Update object</h3>
+<div class="c"><pre>#define RF_OBJECT_UPDATE 0x2600<br><br>/* Flagi */<br>#define RF_NOTME 0x1<br>#define RF_SHOOTING 0xe0<br><br>struct rfObjectUpdate<br>{<br>    uint16_t type; <i>/* 0x2600 */</i>
+    uint16_t len; <i>/* length later */</i>
+    struct rfObjectData objects[]; <i>/* data objects */</i>
+    uint32_t undefined; <i>/* eg. FF FF FF FF */</i>
+};
+
+struct rfObjectData
+{
+    uint32_t eid; <i>/* object ID (not UID)?  */</i>
+    uint8_t flags; <i>/* flags such as A5. If !RF_NOTME fields from undefined to undefined2 [3] is not */</i>
+    uint16_t undefined; <i>/* eg. AB 7D */</i>
+    float x; <i>/* X coord */</i>
+    float y; <i>/* Y */</i>
+    float z; <i>/* Z */</i>
+    uint16_t angle_x; <i>/* X rotation (yaw)? */</i>
+    uint16_t angle_y; <i>/* Y rotation (pitch)? */</i>
+    uint8_t undefined2[6]; <i>/* eg. 00 00 00 80 00 03 */</i>
+    uint8_t health; <i>/* player's health */</i>
+    uint8_t armor; <i>/* player's armour */</i>
+    uint8_t undefined3; <i>/* np. 00 */</i>
+};
+</pre></div>
+
+<h3>16. Use-key</h3>
+<p>When the player presses the use-key (default E), this package is sent by him.</p>
+<div class="c"><pre>#define RF_USE_KEY 0x1000<br><br>struct rfUseKey<br>{<br>    uint16_t type; <i>/* 0x1000 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t id; <i>/* Player ID */</i>
+};
+</pre></div>
+
+<h3>17. Reloading ammunition</h3>
+<p>This package will get when someone reloads the weapon.</p>
+<div class="c"><pre>#define RF_PLAYER_RELOADS_AMMO 0x2E00<br><br>struct rfPlayerReloadsAmmo<br>{<br>    uint16_t type; <i>/* 0x2E00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t undefined[4]; <i>/* 30 02 31 02 */</i>
+    uint32_t weapon; <i>/* ID of weapon */</i>
+    uint8_t undefined2[8]; <i>/* 30 00 00 00 10 00 00 00 */</i>
+};
+</pre></div>
+
+<h3>18. No package</h3>
+<p>When the RF notice that we are not responsible for packages sent the following package:</p>
+<div class="c"><pre>#define RF_NO_REPLY 0x0F00<br><br>struct rfNoReply<br>{<br>    uint16_t type; <i>/* 0x0F00 */</i>
+    uint16_t len; <i>/* length later */</i>
+    uint8_t undefined; <i>/* 6F 31 00 00 00 01 7F 1E */</i>
+};
+</pre></div>
+<p>Do not panic XD. Typically, repeated RF packages, which have not responded so I should just start sending packets back.</p>
+</body></html>

@@ -1,0 +1,16 @@
+#!/bin/bash
+PIDFILE=ahn.pid
+
+if [[ -e ./ahn.pid ]]; then
+	echo "already running: $0"
+	exit 1
+fi
+
+while [[ 1 ]]; do
+	if [[ ! $(pidof ahn-browser) ]]; then
+		./ahn-browser
+	fi
+	sleep 5
+done
+
+rm $PIDFILE	

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="/static/bootstrap/css/bootstrap.min.css" media="screen" />
+<script src="/static/js/jquery-1.10.1.min.js"></script>
+<script src="/static/js/tempo/tempo.min.js"></script>
+<script src="/static/bootstrap/js/bootstrap.min.js"></script>
+<script>
+var serverTable
+
+// sane browsers provide 'atob()' function
+function decodeBase64(data) {
+	var b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+		var o1, o2, o3, h1, h2, h3, h4, bits, i = 0,
+	ac = 0,
+	dec = "",
+	tmp_arr = [];
+
+	if (!data) {
+		return data;
+	}
+
+	data += '';
+
+	do { // unpack four hexets into three octets using index points in b64
+		h1 = b64.indexOf(data.charAt(i++));
+		h2 = b64.indexOf(data.charAt(i++));
+		h3 = b64.indexOf(data.charAt(i++));
+		h4 = b64.indexOf(data.charAt(i++));
+
+		bits = h1 << 18 | h2 << 12 | h3 << 6 | h4;
+
+		o1 = bits >> 16 & 0xff;
+		o2 = bits >> 8 & 0xff;
+		o3 = bits & 0xff;
+
+		if (h3 == 64) {
+		  tmp_arr[ac++] = String.fromCharCode(o1);
+		} else if (h4 == 64) {
+		  tmp_arr[ac++] = String.fromCharCode(o1, o2);
+		} else {
+		  tmp_arr[ac++] = String.fromCharCode(o1, o2, o3);
+		}
+	} while (i < data.length);
+
+	dec = tmp_arr.join('');
+
+	return dec;
+}
+
+function initTables() {
+	serverTable = Tempo.prepare('server-info',
+		{
+			'var_braces' : '\\[\\[\\]\\]',
+			'tag_braces' : '\\[\\?\\?\\]'
+		})
+	serverTable.when(TempoEvent.Types.RENDER_COMPLETE, function(event) {
+		// stuff here
+	})
+}
+
+function renderTable(data) {
+	console.log(data)
+	$.each(data, function(k,v) {
+		v.Info.Name = decodeBase64(v.Info.Name)
+		v.Info.Level = decodeBase64(v.Info.Level)
+		v.Info.Mod = decodeBase64(v.Info.Mod)
+	})
+	serverTable.render(data)
+}
+
+$(document).ready(function() {
+	
+	initTables()
+	
+	$.ajax({
+		url: '/rf/servers',
+		method: 'GET',
+		dataType: 'json',
+		success: function(data) { renderTable(data) }
+	})
+})
+</script>
+</head>
+<body>
+<div class="container-fluid">
+	<div class="row-fluid">
+		<div class="span12 text-center"><h1>Red Faction Browser</h1></div>
+	</div>
+	<div class="row-fluid well">
+		<div class="text-center"><h3>#ahnenerbe | irc.rizon.net</h3></div>
+	</div>
+	<div class="row-fluid">
+		<div class="span12" id="servers">
+			<table id="server-info" class="table table-condensed">
+				<tr>
+					<th>name</th>
+					<th>players</th>
+					<th>max-players</th>
+					<th>gtype</th>
+					<th>level</th>
+					<th>version</th>
+					<th>server-ip</th>
+					<th>port</th>
+				</tr>
+				<tr data-template>
+					<td>[[Info.Name]]</td>
+					<td>[[Info.Players]]</td>
+					<td>[[Info.MaxPlayers]]</td>
+					<td>[[Info.GameType]]</td>
+					<td>[[Info.Level]]</td>
+					<td>[[Info.Version]]</td>
+					<td>[[Addr]]</td>
+					<td>[[Port]]</td>
+				</tr>
+			</table>
+		</div>
+	</div>
+</div>
+</body>
+</html>
