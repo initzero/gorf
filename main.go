@@ -11,10 +11,11 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+	"fmt"
 )
 
 import (
-//mux "github.com/gorilla/mux"
+	mux "github.com/gorilla/mux"
 )
 
 type Page struct {
@@ -37,30 +38,30 @@ type Page struct {
 // "173.242.119.102:18444"
 // "75.19.98.179:7777"
 
-const RFDedicated byte = 0x01
-const RFNotLAN byte = 0x02
-const RFPassword byte = 0x04
+const RF_DEDICATED byte = 0x01
+const RF_NOTLAN byte = 0x02
+const RF_PASSWORD byte = 0x04
 
 // game versions
-const RF10 byte = 0x87
-const RF11 byte = 0x87
-const RF12 byte = 0x89
-const RF13 byte = 0x91
+const RF_10 byte = 0x87
+const RF_11 byte = 0x87
+const RF_12 byte = 0x89
+const RF_13 byte = 0x91
 
 // game types
-const RFDM byte = 0x00
-const RFCTF byte = 0x01
-const RFTeamDM byte = 0x02
+const RF_DM byte = 0x00
+const RF_CTF byte = 0x01
+const RF_TEAMDM byte = 0x02
 
 // join
-const RFJoin uint16 = 0x0002
-const RFJoinFailed uint16 = 0x0004
-const RFJoinSuccess uint16 = 0x0003
+const RF_JOIN uint16 = 0x02
+const RF_JOIN_FAILED uint16 = 0x04
+const RF_JOIN_SUCCESS uint16 = 0x03
 
 // join fail reason
-const RFWrongPass byte = 0x03
-const RFBanned byte = 0x0a
-const RFMapChange byte = 0x05
+const RF_WRONG_PASS byte = 0x03
+const RF_BANNED byte = 0x0a
+const RF_MAP_CHANGE byte = 0x05
 
 // Join
 type JoinServer struct {
@@ -151,6 +152,16 @@ func writeStructFields(s interface{}, buf *bytes.Buffer) error {
 // 	Undefined2 [16]byte // 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00
 // 	//Undefined2 [32]byte //only v1.0 (22 3b 68 3a 00 20 f0 00 ee 82 b2 7e 00 e0 f6 00 cd 0d 66 92 00 c0 13 00 00 00 00 00 00 00 00 00)
 // }
+
+// Valid:
+// 00 02 28 00 89 55 63 68 69 6d 61 20 53 61 73 6b 69 65 00 05 00 00 00 00 28 0a 00 00 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00 
+
+// Current:
+// 02 00 28 00 91 55 63 68 69 6d 61 20 53 61 73 6b 69 65 05 00 00 00 28 0a 00 00 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00
+
+// Current (BigEndian):
+// 00 02 00 28 91 55 63 68 69 6d 61 20 53 61 73 6b 69 65 00 00 00 05 00 00 0a 28 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00 
+
 func joinServer(ip string, port int32) {
 	localAddr, err := net.ResolveUDPAddr("udp", ":0")
 	checkErr(err, "resolve local")
@@ -161,21 +172,23 @@ func joinServer(ip string, port int32) {
 
 	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
 	checkErr(err, "dial server")
-	conn.SetDeadline(time.Now().Add(3e9))
+	//conn.SetDeadline(time.Now().Add(3e9))
 	joinPayload := JoinServer{}
-	joinPayload.Type = 0x0002
-	joinPayload.Version = RF13
-	joinPayload.Name = []byte("[Wrex] Dead Krogan")
-	joinPayload.Undefined = 0x00000005
-	joinPayload.Password = []byte("")
-	joinPayload.ConnSpeed = 0x00000a28
+	joinPayload.Type = RF_JOIN
+	joinPayload.Version = RF_12
+	joinPayload.Name = []byte("[NSA] Prism")
+	joinPayload.Name = append(joinPayload.Name, 0x00)
+	joinPayload.Undefined = 0x050 << 24							// some junk
+	joinPayload.Password = []byte("cold")
+	joinPayload.Password = append(joinPayload.Password, 0x00)
+	joinPayload.ConnSpeed = (0x28 << 8) | 0x0a 					// l0l
 	joinPayload.Undefined2 = [16]byte{
 		0x7e, 0x40, 0xc2, 0x1a, 0x00, 0xc0, 0x13, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
 
 	// add up the struct field sizes - type
-	joinPayload.Size = uint16(27 + len(joinPayload.Name) + len(joinPayload.Password))
+	joinPayload.Size = (uint16(25 + len(joinPayload.Name) + len(joinPayload.Password)) << 8)
 
 	buf := new(bytes.Buffer)
 	err = writeStructFields(&joinPayload, buf)
@@ -184,16 +197,67 @@ func joinServer(ip string, port int32) {
 	var resp []byte = make([]byte, 1024)
 	var gotPkt chan int = make(chan int, 1)
 	go func(conn *net.UDPConn, buffer []byte, gotPkt chan int) {
+		counter := 0
 		for {
 			ret, err := conn.Read(buffer)
 			checkErr(err, "info read goroutine")
 			gotPkt <- ret
-			break
+			counter += 1
+			if counter > 1 {
+				close(gotPkt)
+				break
+			}
 		}
 	}(conn, resp, gotPkt)
 
 	conn.Write(buf.Bytes())
-	<-gotPkt
+	
+	for bytesRead := range gotPkt {
+		fmt.Printf("%#v\n", resp[0:bytesRead])
+	}
+
+	haveMapPayload := []byte{
+		0x01, 0x03, 0x00, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	conn.Write(haveMapPayload)
+	// 01:03:00:42:01:00:00:00:00:00:00
+	gotPkt = make(chan int, 1)
+	go func(conn *net.UDPConn, buffer []byte, gotPkt chan int) {
+		counter := 0
+		for {
+			ret, err := conn.Read(buffer)
+			checkErr(err, "info read goroutine")
+			gotPkt <- ret
+			counter += 1
+			if counter > 0 {
+				close(gotPkt)
+				break
+			}
+		}
+	}(conn, resp, gotPkt)
+
+	for bytesRead := range gotPkt {
+		fmt.Printf("%#v\n", resp[0:bytesRead])
+	}
+	unknownPayload := []byte {
+		0x01, 0x06, 0x00, 0xbd, 0xfe, 0x00, 0x28, 0x00, 0x50, 0x2f,	
+	}
+	conn.Write(unknownPayload)
+
+	gotPkt = make(chan int, 1)
+	go func(conn *net.UDPConn, buffer []byte, gotPkt chan int) {
+		for {
+			ret, err := conn.Read(buffer)
+			fmt.Printf("read: %#v\n", buffer[0:ret])
+			checkErr(err, "info read goroutine")
+			if ret == 4 {
+				if buffer[1] == 0x18 {
+					conn.Write([]byte{0x00, 0x19, 0x00, 0x00})
+				}
+			}
+			
+		}
+	}(conn, resp, gotPkt)
 }
 
 func parseTrackerResponse(resp []byte, pipe chan []ServerIP) {
@@ -315,6 +379,7 @@ func RFServerInfo(server ServerIP, pipe chan ServerIP) {
 		server.Info = parseServerInfoResponse(resp[0:bRead])
 	}
 	pipe <- server
+	go joinServer(server.Addr, server.Port)
 }
 
 // get the RF server IPs and Ports
@@ -400,10 +465,10 @@ func Home(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	joinServer("192.95.22.53", 7756)
-	// r := mux.NewRouter()
-	// r.HandleFunc("/", Home)
-	// r.HandleFunc("/rf/servers", RFServers)
-	// r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	// http.ListenAndServe(":8080", r)
+//	go joinServer("192.95.22.53", 7759)
+	r := mux.NewRouter()
+	r.HandleFunc("/", Home)
+	r.HandleFunc("/rf/servers", RFServers)
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.ListenAndServe(":8080", r)
 }
