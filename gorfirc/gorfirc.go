@@ -58,9 +58,9 @@ func buildServerString(s rflib.ServerIP) string {
 	var gameType string
 	switch(info.GameType) {
 	case rflib.RF_DM:
-		gameType = "Deathmatch"
+		gameType = "DM"
 	case rflib.RF_TEAMDM:
-		gameType = "Team Deathmatch"
+		gameType = "TDM"
 	case rflib.RF_CTF:
 		gameType = "CTF"
 	default:
@@ -73,7 +73,7 @@ func buildServerString(s rflib.ServerIP) string {
 	
 	mod := string(info.Mod[:])
 	
-	return name + " " + s.Addr + ":" + strconv.Itoa(int(s.Port)) + " " + version + " " + gameType + " " + players + " " + level + " " + mod
+	return name + "\t" + version + "\t" + gameType + "\t" + players + "\t" + level + "\t" + mod + "\t" +  s.Addr + ":" + strconv.Itoa(int(s.Port))
 }
 
 func sendServerListToIRC(servers []rflib.ServerIP, i *irc.Connection, e *irc.Event, showEmpty bool, ready chan bool) {
@@ -114,7 +114,9 @@ func SetupIRC(server string, channel string) {
 					<-rdy
 				} else if split[1] == "join" {
 					if len(split) == 4 {
-						go rflib.JoinServerByIP(split[2] + ":" + split[3])
+						go rflib.JoinServerByIP(split[2] + ":" + split[3], "")
+					} else if len(split) == 5 {
+						go rflib.JoinServerByIP(split[2] + ":" + split[3], split[4])
 					}
 				}
 			}

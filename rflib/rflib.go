@@ -150,7 +150,7 @@ func writeStructFields(s interface{}, buf *bytes.Buffer) error {
 // 00 02 00 28 91 55 63 68 69 6d 61 20 53 61 73 6b 69 65 00 00 00 05 00 00 0a 28 7e 40 c2 1a 00 c0 13 00 00 00 00 00 00 00 00 00 
 
 // ip -> ip_addr:port 
-func JoinServerByIP(ip string) {
+func JoinServerByIP(ip string, playerName string) {
 	localAddr, err := net.ResolveUDPAddr("udp", ":0")
 	checkErr(err, "resolve local")
 
@@ -163,7 +163,11 @@ func JoinServerByIP(ip string) {
 	joinPayload := JoinServer{}
 	joinPayload.Type = RF_JOIN
 	joinPayload.Version = RF_12
-	joinPayload.Name = []byte("[NSA] Prism")
+	if playerName == "" {
+		joinPayload.Name = []byte("[Volition] Admin")
+	} else {
+		joinPayload.Name = []byte(playerName)
+	}
 	joinPayload.Name = append(joinPayload.Name, 0x00)
 	joinPayload.Undefined = 0x050 << 24							// some junk
 	joinPayload.Password = []byte("cold")
